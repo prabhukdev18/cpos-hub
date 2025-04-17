@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+@theme {
+  --color-sand-50: oklch(97% 0.02 90);
+  --color-sand-100: oklch(93% 0.03 90);
+  --color-sand-200: oklch(87% 0.04 90);
+  --color-sand-300: oklch(78% 0.05 90);
+  --color-sand-400: oklch(65% 0.06 90);
+  --color-sand-500: oklch(54% 0.07 90);
+  --color-sand-600: oklch(48% 0.08 90);
+  --color-sand-700: oklch(41% 0.09 90);
+  --color-sand-800: oklch(34% 0.1 90);
+  --color-sand-900: oklch(27% 0.11 90);
+}

@@ -1,0 +1,71 @@
+name: Playwright Tests
+on:
+  pull_request:
+    branches: [ main ]
+permissions:
+  pull-requests: write
+  contents: read
+  actions: read
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.51.1-noble
+      options: --user 1001
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+        cache: npm
+    - name: Add Amplify Outputs
+      run: |
+        echo "${{ secrets.PLAYWRIGHT_AMPLIFY_OUTPUTS }}" | base64 -d > amplify_outputs.json
+    - name: Install dependencies
+      run: npm ci --cache .npm --prefer-offline
+    - name: Run Playwright tests
+      run: npx playwright test
+    - uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 30
+    - name: Comment on Pull Request with Playwright Report
+      if: ${{ success() || failure() }}
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const artifactName = 'playwright-report';
+          const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            run_id: context.runId,
+          });
+
+          const artifact = artifacts.data.artifacts.find(a => a.name === artifactName);
+          if (!artifact) {
+            console.error(`Artifact with name '${artifactName}' not found.`);
+            return;
+          }
+
+          const reportUrl = `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}/artifacts/${artifact.id}`;
+
+          const commentBody = `### 🧪 Playwright Test Report\n\n` +
+            `The Playwright test report is available [here](${reportUrl}).`;
+
+          const pullRequestNumber = context.payload.pull_request?.number;
+
+          if (!pullRequestNumber) {
+            console.error('This workflow was not triggered by a pull request.');
+            return;
+          }
+
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: pullRequestNumber,
+            body: commentBody,
+          });

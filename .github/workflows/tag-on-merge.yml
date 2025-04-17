@@ -1,0 +1,72 @@
+name: Tag Release on Merge to Main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  tag_release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+
+      - name: Get Current Tag
+        id: get_tag
+        run: |
+          latest_tag=$(git describe --tags --abbrev=0 || echo "v0.0.0")
+          echo "latest=$latest_tag" >> $GITHUB_OUTPUT
+
+      - name: Check for Minor Version Bump
+        id: check_minor
+        run: |
+          # Get the latest commit message
+          commit_msg=$(git log -1 --pretty=%B)
+          # Check if commit message contains [minor] or #minor
+          if echo "$commit_msg" | grep -iE '\[minor\]|#minor'; then
+            echo "bump_minor=true" >> $GITHUB_OUTPUT
+          else
+            echo "bump_minor=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bump Version and Tag
+        id: bump_tag
+        run: |
+          old=${{ steps.get_tag.outputs.latest }}
+          IFS='.' read -r -a parts <<< "${old#v}"
+          major=${parts[0]}
+          minor=${parts[1]}
+          patch=${parts[2]}
+          
+          if [[ "${{ steps.check_minor.outputs.bump_minor }}" == "true" ]]; then
+            # Bump minor version and reset patch
+            new="v$major.$((minor + 1)).0"
+          else
+            # Bump patch version
+            new="v$major.$minor.$((patch + 1))"
+          fi
+          
+          git tag $new
+          git push origin $new
+          echo "new_tag=$new" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.bump_tag.outputs.new_tag }}
+          name: Release ${{ steps.bump_tag.outputs.new_tag }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
